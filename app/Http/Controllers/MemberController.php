@@ -9,6 +9,8 @@ use Image;
 use File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Validator;
+use App\Models\TokenManagement;
 
 class MemberController extends Controller
 {
@@ -35,29 +37,68 @@ class MemberController extends Controller
         $member->Foto       = $this->upload($request);
         $member->save();
 
-        return response()->json(['Sukses' => 'Anda telah berhasil mendaftar']);
+        return response()->json(['success' => 'Anda telah berhasil mendaftar']);
     }
 
     public function login(Request $request)
-    {
-        $username       = $request->Username;
-        $password       = $request->Password;
-        $data           = Member::where('Username',$username)->first();
+    {   
+    	$validate = Validator::make($request->all(), [
+    		'Username' => 'required|string',
+    		'Password' => 'required|string'
+    	]);
+    	if($validate->fails()){
+    		//kalau ada salah input, tampilkan error dalam format json
+    		return [
+    			'error' => $validate->errors(),
+    			'data' => false
+    		];
+    	}
+
+    	//cek username
+    	$cek_member = Member::where('Username', $request->Username)->first();
+    	if(empty($cek_member)){
+    		return [
+    			'error' => 'Username not found',
+    			'data' => false
+    		];
+    	}
+
+        //cek password
+    	if(!Hash::check($request->Password,$cek_member->Password)){
+    		return [
+    			'error' => 'Invalid password provided',
+    			'data' => false
+            ];  
+        }
         
-        if($data){ //apakah email tersebut ada atau tidak
-            if(Hash::check($password,$data->Password)){
-                Session::put('Nama',$data->Nama);
-                Session::put('Email',$data->Email);
-                Session::put('Login',TRUE);
-                return session()->all();
-            }
-            else{
-                return response()->json(['Hasil'=>'Password Salah!']);
-            }
-        }
-        else{
-            return response()->json(['Hasil'=>'Username Salah!']);
-        }
+    	//setelah melewati semua filter diatas, artinya email dan password sudah benar. 
+    	$token_instance = $this->registerToken($cek_member);
+    	return [
+    		'error' => false,
+    		'data' => $token_instance
+    	];
+    }
+
+    public function detail(){
+        return 'halo anda masuk';
+    }
+
+    protected function registerToken(Member $member){
+    	//generate custom hash sebagai auth token
+    	$generated_token = base64_encode(sha1(rand(1, 10000) . uniqid() . time()));
+    	//manage token ini akan expired dalam jangka waktu berapa lama
+    	$expired = date('Y-m-d H:i:s', strtotime('+1 day'));
+
+    	//proses simpan token ke database
+    	$token_instance = new TokenManagement;
+    	$token_instance->member_username = $member->Username;
+    	$token_instance->access_token = $generated_token;
+    	$token_instance->expired_at = $expired;
+    	$token_instance->is_active = 1;
+    	$token_instance->save();
+
+    	//setelah token direcord ke database, kembalikan nilai token ke response
+    	return $token_instance;
     }
 
     public function updateProfil(Request $request)
@@ -75,7 +116,7 @@ class MemberController extends Controller
         $member->Foto       = $this->upload($request);
         $member->save();
 
-        return response()->json(['Sukses' => 'Profil Berhasil di Update']);
+        return response()->json(['success' => 'Profil Berhasil di Update']);
     }
 
     public function upload($request)
@@ -100,7 +141,7 @@ class MemberController extends Controller
     
     public function logout(){
         Session::flush();
-        return response()->json(['Logout' => 'Anda Berhasil Logout']);
+        return response()->json(['success' => 'Anda Berhasil Logout']);
     }
 
     public function deleteAkun($username)
@@ -108,6 +149,6 @@ class MemberController extends Controller
         $member = Member::find($username);
         $member->delete();
 
-        return response()->json(['Hapus' => 'Akun Anda Telah Terhapus']);
+        return response()->json(['success' => 'Akun Anda Telah Terhapus']);
     }
 }
