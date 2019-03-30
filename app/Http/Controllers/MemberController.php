@@ -14,11 +14,6 @@ use App\Models\TokenManagement;
 
 class MemberController extends Controller
 {
-    public function index()
-    {
-        return Member::all();
-    }
-
     public function register(Request $request)
     {
         $member             = new Member;
@@ -34,7 +29,6 @@ class MemberController extends Controller
         $member->Status     = $request->Status;
         $member->Profesi    = $request->Profesi;
         $member->Poin       = 0;
-        $member->Foto       = $this->upload($request);
         $member->save();
 
         return response()->json(['success' => 'Anda telah berhasil mendaftar']);
@@ -72,18 +66,15 @@ class MemberController extends Controller
         }
         
     	//setelah melewati semua filter diatas, artinya email dan password sudah benar. 
-    	$token_instance = $this->registerToken($cek_member);
+    	$token_instance = $this->registerToken($cek_member, $request->Username);
     	return [
     		'error' => false,
     		'data' => $token_instance
     	];
     }
 
-    public function detail(){
-        return 'halo anda masuk';
-    }
-
-    protected function registerToken(Member $member){
+    protected function registerToken(Member $member, $username)
+    {
     	//generate custom hash sebagai auth token
     	$generated_token = base64_encode(sha1(rand(1, 10000) . uniqid() . time()));
     	//manage token ini akan expired dalam jangka waktu berapa lama
@@ -91,7 +82,7 @@ class MemberController extends Controller
 
     	//proses simpan token ke database
     	$token_instance = new TokenManagement;
-    	$token_instance->member_username = $member->Username;
+    	$token_instance->member_username = $username;
     	$token_instance->access_token = $generated_token;
     	$token_instance->expired_at = $expired;
     	$token_instance->is_active = 1;
@@ -101,9 +92,26 @@ class MemberController extends Controller
     	return $token_instance;
     }
 
+    protected function checkToken($token)
+    {
+        $pecah_token        = explode(" ", $token);
+        $token_management   = TokenManagement::where('access_token', $pecah_token[1])->first();
+        return $token_management->member_username;
+    }
+
+    public function lihatProfil(Request $request)
+    {
+        $username   = $this->checkToken($request->header('Authorization'));
+        $member     = Member::find($username);
+        $member->Uname = $username;
+        return $member;
+    }
+    
     public function updateProfil(Request $request)
     {
-        $member             = Member::find($request->Username);
+        $username = $this->checkToken($request->header('Authorization'));
+
+        $member             = Member::find($username);
         $member->Nama       = $request->Nama;
         $member->Password   = bcrypt($request->Password);
         $member->Alamat     = $request->Alamat;
@@ -113,15 +121,14 @@ class MemberController extends Controller
         $member->NoTelepon  = $request->NoTelepon;
         $member->Status     = $request->Status;
         $member->Profesi    = $request->Profesi;
-        $member->Foto       = $this->upload($request);
         $member->save();
 
         return response()->json(['success' => 'Profil Berhasil di Update']);
     }
-
-    public function upload($request)
+    
+    public function upload(Request $request)
     {
-        $path = storage_path('app/public/images');
+        $path           = storage_path('app/public/images');
 
         //JIKA FOLDERNYA BELUM ADA
         if (!File::isDirectory($path)) {
@@ -130,23 +137,39 @@ class MemberController extends Controller
         }
 
         //MENGAMBIL FILE IMAGE DARI FORM
-        $file = $request->file('Foto');
+        $file           = $request->file('Foto');
         
         //MEMBUAT NAME FILE DARI GABUNGAN TIMESTAMP DAN UNIQID()
-        $fileName = Carbon::now()->timestamp . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-
+        $fileName       = Carbon::now()->timestamp . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
         Image::make($file)->save($path . '/' . $fileName);
-        return $fileName;
+
+        $username       = $this->checkToken($request->header('Authorization'));
+        $member         = Member::find($username);
+        $member->Foto   = $fileName;
+        $member->save();
+        return response()->json(['success' => 'Profil Berhasil di Update']);
     }
     
-    public function logout(){
-        Session::flush();
+    public function logout(Request $request)
+    {
+        $token                          = $request->header('Authorization');
+        $pecah_token                    = explode(" ", $token);
+        $token_management               = TokenManagement::where('access_token', $pecah_token[1])->first();
+        $token_management->is_active    = 0;
+        $token_management->save();
         return response()->json(['success' => 'Anda Berhasil Logout']);
     }
 
-    public function deleteAkun($username)
+    public function deleteAkun(Request $request)
     {
-        $member = Member::find($username);
+        $token                          = $request->header('Authorization');
+        $pecah_token                    = explode(" ", $token);
+        $token_management               = TokenManagement::where('access_token', $pecah_token[1])->first();
+        $token_management->is_active    = 0;
+        $token_management->save();
+
+        $username   = $this->checkToken($request->header('Authorization'));
+        $member     = Member::find($username);
         $member->delete();
 
         return response()->json(['success' => 'Akun Anda Telah Terhapus']);

@@ -18,16 +18,15 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-
-
 Route::post('member/register', 'MemberController@register');
 Route::post('member/login', 'MemberController@login');
 
 Route::group(['middleware' => 'check-token'], function(){
-    Route::get('member/detail', 'MemberController@detail');
-    Route::delete('member/deleteakun/{id}', 'MemberController@deleteAkun');
-    Route::post('member/updateprofil', 'MemberController@updateProfil');
-    Route::get('member', 'MemberController@index');
+    Route::get('member/delete-akun', 'MemberController@deleteAkun');
+    Route::post('member/update-profil', 'MemberController@updateProfil');
+    Route::post('member/upload-foto', 'MemberController@upload');
+    Route::get('member/lihat-profil', 'MemberController@lihatProfil');
+    Route::get('member/logout', 'MemberController@logout');
     //kalau nanti ada endpoint yang butuh authentication tinggal dimasukkan di grup ini saja
 }); 
 
