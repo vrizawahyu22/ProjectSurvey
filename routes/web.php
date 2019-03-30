@@ -17,12 +17,4 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::name('admin')->group(function () {
-    Route::post('admin/login', 'CAdmin@login');
-    Route::get('admin/coba', 'CAdmin@coba')->name('admin.coba');
-});
 
-Route::get('/register', function()
-{
-    return View::make('register');
-});

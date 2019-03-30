@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\VerifyEmail;
 use Illuminate\Http\Request;
 use App\Member;
 use Carbon\Carbon;
@@ -11,11 +12,40 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 use Validator;
 use App\Models\TokenManagement;
+use Mail;
+use Crypt;
 
 class MemberController extends Controller
 {
     public function register(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'Username'      => 'required',
+            'Email'         => 'required|email',
+            'Password'      => 'required',
+            'C_password'    => 'required|same:Password',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 401);
+        }
+
+        $cek_member         = Member::where('Username', $request->Username)->first();
+    	if($cek_member){
+    		return [
+    			'error'     => 'Username telah ada',
+    			'data'      => false
+    		];
+        }
+
+        $cek_email          = Member::where('Email', $request->Email)->first();
+        if($cek_email){
+    		return [
+    			'error'     => 'Email telah ada',
+    			'data'      => false
+    		];
+        }
+
         $member             = new Member;
         $member->Username   = $request->Username;
         $member->Nama       = $request->Nama;
@@ -31,7 +61,29 @@ class MemberController extends Controller
         $member->Poin       = 0;
         $member->save();
 
-        return response()->json(['success' => 'Anda telah berhasil mendaftar']);
+        Mail::to($member->Email)->send(new VerifyEmail($member));
+
+        return response()->json(['success' => 'Anda telah berhasil mendaftar, silahkan verifikasi email anda']);
+    }
+
+    public function verify()
+    {
+        if (empty(request('token'))) {
+            // if token is not provided
+            return response()->json(['error' => 'Anda harus verifikasi email']);
+        }
+        // descrypt token as email
+        $decryptedEmail = Crypt::decrypt(request('token'));
+        // find user by email
+        $member = Member::whereEmail($decryptedEmail)->first();
+        if ($member->status == 'activated') {
+            // user is already active, do something
+        }
+        // otherwise change user status to "activated"
+        $member->EmailStatus = 'activated';
+        $member->save();
+        
+        return response()->json(['success' => 'Verifikasi email sukses'], 200);
     }
 
     public function login(Request $request)
@@ -39,7 +91,8 @@ class MemberController extends Controller
     	$validate = Validator::make($request->all(), [
     		'Username' => 'required|string',
     		'Password' => 'required|string'
-    	]);
+        ]);
+        
     	if($validate->fails()){
     		//kalau ada salah input, tampilkan error dalam format json
     		return [

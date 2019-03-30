@@ -27,6 +27,7 @@ Route::group(['middleware' => 'check-token'], function(){
     Route::post('member/upload-foto', 'MemberController@upload');
     Route::get('member/lihat-profil', 'MemberController@lihatProfil');
     Route::get('member/logout', 'MemberController@logout');
+    Route::get('verify', 'MemberController@verify')->name('signup.verify');
     //kalau nanti ada endpoint yang butuh authentication tinggal dimasukkan di grup ini saja
 }); 
 
