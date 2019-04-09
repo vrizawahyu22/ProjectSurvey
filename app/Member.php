@@ -20,4 +20,9 @@ class Member extends Authenticatable
     protected $hidden = [
         'Username', 'Password', 'remember_token',
     ];
+
+    public function articles()
+    {
+        return $this->hasMany('App\Survey');
+    }
 }

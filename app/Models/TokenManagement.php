@@ -6,5 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class TokenManagement extends Model
 {
-    public $table = 'token_management';
+    public $table = 'token_managements';
 }

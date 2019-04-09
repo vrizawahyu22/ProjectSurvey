@@ -48,6 +48,7 @@ class MemberController extends Controller
 
         $member             = new Member;
         $member->Username   = $request->Username;
+        $member->Jenis      = 'member';
         $member->Nama       = $request->Nama;
         $member->Email      = $request->Email;
         $member->Password   = bcrypt($request->Password);
@@ -86,7 +87,7 @@ class MemberController extends Controller
         return response()->json(['success' => 'Verifikasi email sukses'], 200);
     }
 
-    public function login(Request $request)
+    public function login($jenis, Request $request)
     {   
     	$validate = Validator::make($request->all(), [
     		'Username' => 'required|string',
@@ -118,15 +119,22 @@ class MemberController extends Controller
             ];  
         }
         
-    	//setelah melewati semua filter diatas, artinya email dan password sudah benar. 
-    	$token_instance = $this->registerToken($cek_member, $request->Username);
-    	return [
-    		'error' => false,
-    		'data' => $token_instance
-    	];
+        if($cek_member->Jenis == $jenis)
+        {
+            //setelah melewati semua filter diatas, artinya email dan password sudah benar. 
+            $token_instance = $this->registerToken($request->Username);
+            return [
+                'error' => false,
+                'data' => $token_instance
+            ];
+        }
+        else
+        {
+            return response()->json(['error' => 'Permintaan Tidak Layak'], 400);
+        }
     }
 
-    protected function registerToken(Member $member, $username)
+    protected function registerToken($username)
     {
     	//generate custom hash sebagai auth token
     	$generated_token = base64_encode(sha1(rand(1, 10000) . uniqid() . time()));
@@ -154,15 +162,15 @@ class MemberController extends Controller
 
     public function lihatProfil(Request $request)
     {
-        $username   = $this->checkToken($request->header('Authorization'));
-        $member     = Member::find($username);
-        $member->Uname = $username;
+        $username           = $this->checkToken($request->header('Authorization'));
+        $member             = Member::find($username);
+        $member->Uname      = $username;
         return $member;
     }
     
     public function updateProfil(Request $request)
     {
-        $username = $this->checkToken($request->header('Authorization'));
+        $username           = $this->checkToken($request->header('Authorization'));
 
         $member             = Member::find($username);
         $member->Nama       = $request->Nama;
@@ -213,18 +221,39 @@ class MemberController extends Controller
         return response()->json(['success' => 'Anda Berhasil Logout']);
     }
 
-    public function deleteAkun(Request $request)
+    public function deleteAkun($username, Request $request)
     {
         $token                          = $request->header('Authorization');
         $pecah_token                    = explode(" ", $token);
         $token_management               = TokenManagement::where('access_token', $pecah_token[1])->first();
-        $token_management->is_active    = 0;
-        $token_management->save();
+        
+        $member                         = Member::find($token_management->member_username);
+        if($member->Jenis == 'Member')
+        {
+            $token_management->is_active    = 0;
+            $token_management->save();
 
-        $username   = $this->checkToken($request->header('Authorization'));
-        $member     = Member::find($username);
-        $member->delete();
-
-        return response()->json(['success' => 'Akun Anda Telah Terhapus']);
+            $uname   = $this->checkToken($request->header('Authorization'));
+            if ($uname == $username)
+            {
+                $member     = Member::find($uname);
+                $member->delete();
+                return response()->json(['success' => 'Akun Anda Telah Terhapus'],200);
+            }
+            else
+            {
+                return response()->json(['error' => 'Method Not Allowed'], 405);
+            }
+        }
+        else if ($member->Jenis == 'Admin')
+        {
+            $member     = Member::find($username);
+            if ($member == NULL)
+            {
+                return response()->json(['error' => 'Akun Tidak Ditemukan'], 404);
+            }
+            $member->delete();
+            return response()->json(['success' => 'Akun '. $username .' Telah Terhapus'],200);
+        }
     }
 }
